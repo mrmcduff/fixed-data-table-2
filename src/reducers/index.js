@@ -36,6 +36,7 @@ function getInitialState() {
     /*
      * Input state set from props
      */
+    propsReference: {},
     columnProps: [],
     columnGroupProps: [],
     elementTemplates: {
@@ -250,6 +251,7 @@ function setStateFromProps(state, props) {
     columnGroupProps,
     columnProps,
     elementTemplates,
+    propsReference: props,
   });
 
   newState.elementHeights = Object.assign(

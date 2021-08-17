@@ -34,8 +34,6 @@ class FixedDataTableContainer extends React.Component {
   constructor(props) {
     super(props);
 
-    this.update = this.update.bind(this);
-
     this.reduxStore = FixedDataTableStore.get();
 
     this.scrollActions = bindActionCreators(
@@ -52,21 +50,38 @@ class FixedDataTableContainer extends React.Component {
       props,
     });
 
-    this.unsubscribe = this.reduxStore.subscribe(this.update);
-    this.state = this.getBoundState();
+    this.unsubscribe = this.reduxStore.subscribe(this.onStoreUpdate.bind(this));
+    this.state = {
+      boundState: FixedDataTableContainer.getBoundState(this.reduxStore), // bound state represents the state from the store that's passed on to FDT
+      reduxStore: this.reduxStore, // put store instance to local state so that getDerivedStateFromProps can access it
+    };
   }
 
-  componentWillReceiveProps(nextProps) {
+  static getDerivedStateFromProps(nextProps, currentState) {
     invariant(
       nextProps.height !== undefined || nextProps.maxHeight !== undefined,
       'You must set either a height or a maxHeight'
     );
 
-    this.reduxStore.dispatch({
+    // Unlike componentWillReceiveProps is only called when props are changed.
+    // But getDerivedStateFromProps is called for both prop and state updates.
+    // If props are unchanged, then there's no need to calculate derived state.
+    if (nextProps === currentState.boundState.propsReference) {
+      return null;
+    }
+
+    // Props have changed, so update the redux store with the latest props and also return the new state
+    currentState.reduxStore.dispatch({
       type: ActionTypes.PROP_CHANGE,
       newProps: nextProps,
-      oldProps: this.props,
+      oldProps: currentState.boundState.propsReference,
     });
+
+    return {
+      boundState: FixedDataTableContainer.getBoundState(
+        currentState.reduxStore
+      ),
+    };
   }
 
   componentWillUnmount() {
@@ -81,7 +96,7 @@ class FixedDataTableContainer extends React.Component {
     const fdt = (
       <FixedDataTable
         {...this.props}
-        {...this.state}
+        {...this.state.boundState}
         scrollActions={this.scrollActions}
         columnActions={this.columnActions}
       />
@@ -93,8 +108,8 @@ class FixedDataTableContainer extends React.Component {
     return fdt;
   }
 
-  getBoundState() {
-    const state = this.reduxStore.getState();
+  static getBoundState(reduxStore) {
+    const state = reduxStore.getState();
     const boundState = pick(state, [
       'columnGroupProps',
       'columnProps',
@@ -108,6 +123,7 @@ class FixedDataTableContainer extends React.Component {
       'isColumnResizing',
       'maxScrollX',
       'maxScrollY',
+      'propsReference',
       'rows',
       'rowOffsets',
       'rowSettings',
@@ -123,8 +139,18 @@ class FixedDataTableContainer extends React.Component {
     return boundState;
   }
 
-  update() {
-    this.setState(this.getBoundState());
+  onStoreUpdate() {
+    const newBoundState = FixedDataTableContainer.getBoundState(
+      this.reduxStore
+    );
+
+    // if onStoreUpdate was called through a prop change, then skip it.
+    // This is because getDerivedStateFromProps already calculates the new bound state.
+    if (this.state.boundState.propsReference !== newBoundState.propsReference) {
+      return;
+    }
+
+    this.setState({ boundState: newBoundState });
   }
 }
 
